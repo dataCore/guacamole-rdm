@@ -74,6 +74,15 @@ services:
       - USER_NAME=test
       - USER_PASSWORD=test
 
+  # VNC target with a password the connection does not store: guacd asks for
+  # it ("required"), which exercises the credential prompt (password: test).
+  vnc:
+    build:
+      dockerfile_inline: |
+        FROM alpine:3.22
+        RUN apk add --no-cache xvfb x11vnc xterm font-misc-misc
+        CMD ["sh", "-c", "Xvfb :0 -screen 0 1280x800x24 & sleep 1; DISPLAY=:0 xterm -geometry 100x30+40+40 & x11vnc -display :0 -forever -shared -passwd test -rfbport 5900"]
+
 volumes:
   initdb:
   postgres_data:

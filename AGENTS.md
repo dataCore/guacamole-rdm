@@ -39,6 +39,12 @@ that are not obvious from the code.
 - **A tab is "connected" only after the first frame.** Guacamole reports
   CONNECTED as soon as guacd accepts the session, which for RDP is before the
   target answers.
+- **Nothing that takes typing goes inside the viewport.** Its
+  `Guacamole.Keyboard` listens in the capture phase and swallows every key
+  before an element inside sees it (`stopPropagation` there does not help).
+  The credential prompt therefore sits in `.stage` next to the viewport, and
+  only the tab in front shows it. The keyboard is reset when the window or
+  the viewport loses focus, so no key stays pressed on the remote end.
 - **The image is neutral:** only the `default` theme (close to Guacamole's own
   look, system fonts), no corporate fonts or logos. Installations mount their
   own theme; the app styles itself only through the `--g-*` tokens documented

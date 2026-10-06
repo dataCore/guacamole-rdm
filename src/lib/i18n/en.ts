@@ -58,6 +58,18 @@ export const en: Messages = {
     disconnected: 'Disconnected.',
     reconnect: 'Reconnect',
     close: 'Close tab',
+    credentials: {
+      title: 'Sign in to the remote system',
+      hint: 'The remote system asks for credentials. They are used for this connection only and are not stored.',
+      submit: 'Connect',
+      cancel: 'Cancel',
+      fields: {
+        username: 'Username',
+        password: 'Password',
+        domain: 'Domain',
+        passphrase: 'Passphrase',
+      },
+    },
   },
   workspace: {
     emptyTitle: 'No open session',

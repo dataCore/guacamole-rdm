@@ -54,9 +54,21 @@ are Guacamole *connection groups*.
 - Display follows the window size (dynamic resize where the protocol supports
   it), HiDPI-aware; fullscreen; Ctrl+Alt+Del; clipboard both ways (where the
   browser allows clipboard access).
+- Credential prompt: when a connection stores no credentials and the remote
+  end needs them (RDP with NLA, VNC password), the tab asks for them;
+  nothing is stored.
 - Light/dark theme; the look is a replaceable `theme.css`.
 - German and English UI (`src/lib/i18n/`), switchable at runtime without
   dropping open sessions.
+
+### Not (yet) covered
+
+Guacamole's own client view does more than this front end. Missing so far:
+file transfer (upload, download, file browser for SFTP and RDP drives),
+touch input and on-screen keyboard, microphone input, automatic reconnect,
+a notice for an unstable tunnel, session sharing links and changing
+connection parameters at runtime. For those, open the connection in
+Guacamole's own UI (`/guacamole/`). Changes per release: `CHANGELOG.md`.
 
 ## Deployment
 

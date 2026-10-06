@@ -24,4 +24,6 @@ ssh_conn web01 "$SITEB"
 ssh_conn db01 "$SITEB"
 # Points nowhere on purpose: shows the error state of a tab.
 post connections "{\"parentIdentifier\":\"$SITEA\",\"name\":\"unreachable01\",\"protocol\":\"rdp\",\"parameters\":{\"hostname\":\"192.0.2.1\",\"port\":\"3389\"},\"attributes\":{}}" >/dev/null
+# No password stored: guacd asks for it, the tab shows the credential prompt.
+post connections "{\"parentIdentifier\":\"$TEST\",\"name\":\"vncPrompt01\",\"protocol\":\"vnc\",\"parameters\":{\"hostname\":\"vnc\",\"port\":\"5900\"},\"attributes\":{}}" >/dev/null
 echo "seeded"

@@ -9,6 +9,7 @@
   import { sessionStateLabel, type Session } from '../lib/session.svelte';
   import type { SessionManager } from '../lib/sessions.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import CredentialPrompt from './CredentialPrompt.svelte';
   import ProtocolIcon from './ProtocolIcon.svelte';
 
   let { manager }: { manager: SessionManager } = $props();
@@ -48,7 +49,9 @@
     const next = manager.active;
     keyboard?.reset(); // releases go to typingTo, still the old tab
     typingTo = next;
-    if (next) queueMicrotask(() => viewport?.focus({ preventScroll: true }));
+    // A pending credential prompt keeps the focus; the remote end has
+    // nothing to type into yet.
+    if (next && !next.required) queueMicrotask(() => viewport?.focus({ preventScroll: true }));
   });
 
   /** Local clipboard to the remote side when the user comes back to the
@@ -94,7 +97,10 @@
   }
 </script>
 
-<svelte:window onfocus={syncClipboard} />
+<!-- Keys held while the focus leaves (Alt+Tab, a click into the tree) never
+     send their key-up to the viewport; release them so no modifier stays
+     pressed on the remote end. -->
+<svelte:window onfocus={syncClipboard} onblur={() => keyboard?.reset()} />
 
 <section class="workspace" bind:this={frame}>
   <div class="tabbar" role="tablist">
@@ -150,33 +156,51 @@
     {/if}
   </div>
 
-  <!-- The viewport takes the keyboard; Guacamole handles mouse and keys. -->
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex (the remote desktop needs focus for the keyboard) -->
-  <div role="application" class="viewport" class:g-grid-paper={!active} tabindex="0" bind:this={viewport} onfocus={syncClipboard} onpointerdown={() => viewport.focus({ preventScroll: true })}>
-    {#each manager.sessions as session (session.id)}
-      <div class="host" class:hidden={session.id !== manager.activeId} {@attach host(session)}>
-        {#if session.state !== 'connected'}
-          <div class="overlay">
-            <div class="overlay-box" class:error={session.state === 'error'}>
-              <div class="label">{session.title}</div>
-              <p>{sessionStateLabel(session)}</p>
-              {#if session.state === 'error' || session.state === 'disconnected'}
-                <div class="overlay-actions">
-                  <button class="btn" onclick={() => session.connect()}>{t.session.reconnect}</button>
-                  <button class="btn ghost" onclick={() => manager.close(session.id)}>{t.session.close}</button>
-                </div>
-              {/if}
+  <div class="stage">
+    <!-- The viewport takes the keyboard; Guacamole handles mouse and keys. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (the remote desktop needs focus for the keyboard) -->
+    <div role="application" class="viewport" class:g-grid-paper={!active} tabindex="0" bind:this={viewport} onfocus={syncClipboard} onfocusout={() => keyboard?.reset()} onpointerdown={() => viewport.focus({ preventScroll: true })}>
+      {#each manager.sessions as session (session.id)}
+        <div class="host" class:hidden={session.id !== manager.activeId} {@attach host(session)}>
+          {#if session.state !== 'connected' && !session.required}
+            <div class="overlay">
+              <div class="overlay-box" class:error={session.state === 'error'}>
+                <div class="label">{session.title}</div>
+                <p>{sessionStateLabel(session)}</p>
+                {#if session.state === 'error' || session.state === 'disconnected'}
+                  <div class="overlay-actions">
+                    <button class="btn" onclick={() => session.connect()}>{t.session.reconnect}</button>
+                    <button class="btn ghost" onclick={() => manager.close(session.id)}>{t.session.close}</button>
+                  </div>
+                {/if}
+              </div>
             </div>
-          </div>
-        {/if}
-      </div>
-    {/each}
+          {/if}
+        </div>
+      {/each}
 
-    {#if !active}
-      <div class="empty">
-        <div class="label">{t.workspace.emptyTitle}</div>
-        <p>{t.workspace.emptyHint}</p>
-      </div>
+      {#if !active}
+        <div class="empty">
+          <div class="label">{t.workspace.emptyTitle}</div>
+          <p>{t.workspace.emptyHint}</p>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Outside the viewport on purpose: its Guacamole.Keyboard listens in the
+         capture phase and would swallow every key typed into the form. Only
+         the tab in front asks; a background tab waits until it is shown. -->
+    {#if active?.required}
+      {#key active.id}
+        <div class="overlay">
+          <CredentialPrompt
+            title={active.title}
+            fields={active.required}
+            onSubmit={(values) => active.submitCredentials(values)}
+            onCancel={() => active.disconnect()}
+          />
+        </div>
+      {/key}
     {/if}
   </div>
 </section>
@@ -289,6 +313,13 @@
     padding: 0 6px;
     border-left: 1px solid var(--g-border);
     background: var(--g-bg-2);
+  }
+
+  .stage {
+    flex: 1;
+    position: relative;
+    display: flex;
+    min-height: 0;
   }
 
   .viewport {

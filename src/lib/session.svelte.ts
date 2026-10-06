@@ -1,3 +1,4 @@
+import { credentialFields, type CredentialField } from './credentials';
 import { statusMessage, t } from './i18n';
 import type { ConnectionNode } from './tree';
 
@@ -33,6 +34,9 @@ export class Session {
   error = $state<{ code: number; message: string | null } | null>(null);
   /** Title reported by the remote end (e.g. the RDP window name), if any. */
   remoteName = $state<string | null>(null);
+  /** Parameters guacd is waiting for (credentials the connection does not
+   *  store), or null. The session stays "waiting" until they are sent. */
+  required = $state<CredentialField[] | null>(null);
 
   readonly element: HTMLDivElement;
   #client: Guacamole.Client | null = null;
@@ -95,6 +99,11 @@ export class Session {
     tunnel.onerror = (status) => this.#client === client && this.#fail(status);
     client.onerror = (status) => this.#client === client && this.#fail(status);
     client.onname = (name) => (this.remoteName = name);
+    client.onrequired = (parameters) => {
+      if (this.#client !== client) return;
+      const fields = credentialFields(parameters);
+      this.required = fields.length ? fields : null;
+    };
     client.onstatechange = (state) => {
       if (this.#client !== client) return;
       switch (state) {
@@ -157,6 +166,20 @@ export class Session {
   disconnect(): void {
     this.#teardown();
     this.state = 'disconnected';
+  }
+
+  /** Answer guacd's "required" request. Each value goes out as an argument
+   *  value stream, as in Guacamole's own client; nothing is kept here. */
+  submitCredentials(values: Record<string, string>): void {
+    const client = this.#client;
+    const fields = this.required;
+    if (!client || !fields) return;
+    this.required = null;
+    for (const field of fields) {
+      const writer = new Guacamole.StringWriter(client.createArgumentValueStream('text/plain', field.name));
+      writer.sendText(values[field.name] ?? '');
+      writer.sendEnd();
+    }
   }
 
   /** Close for good: called when the tab goes away. */
@@ -242,6 +265,7 @@ export class Session {
   #teardown(): void {
     const client = this.#client;
     this.#client = null;
+    this.required = null;
     // The old mouse stays bound to the old display element, which is
     // replaced on reconnect; its handler ignores events of a stale client.
     client?.disconnect();

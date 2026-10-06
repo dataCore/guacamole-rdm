@@ -57,6 +57,18 @@ export const de = {
     disconnected: 'Verbindung getrennt.',
     reconnect: 'Neu verbinden',
     close: 'Tab schliessen',
+    credentials: {
+      title: 'Anmeldung am Zielsystem',
+      hint: 'Das Zielsystem verlangt Zugangsdaten. Sie werden nur für diese Verbindung verwendet und nicht gespeichert.',
+      submit: 'Verbinden',
+      cancel: 'Abbrechen',
+      fields: {
+        username: 'Benutzername',
+        password: 'Passwort',
+        domain: 'Domäne',
+        passphrase: 'Passphrase',
+      },
+    },
   },
   workspace: {
     emptyTitle: 'Keine offene Sitzung',
