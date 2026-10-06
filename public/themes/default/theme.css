@@ -1,0 +1,78 @@
+/* Theme "default": close to the look of Guacamole's own web UI (charcoal
+   buttons, pale-green selection, white pages, Carlito/Helvetica), plus a dark
+   variant Guacamole itself does not have. Uses system fonts only.
+
+   Theming contract: the app styles itself only through these --g-* custom
+   properties. Light values on :root, dark on [data-theme="dark"]; an explicit
+   [data-theme="light"] is set by the app as well, so :root alone is enough
+   for light. Optional tokens (on-accent, font-ui, selection-*) fall back to
+   required ones; see src/app.css. */
+
+:root,
+[data-theme="light"] {
+  --g-accent: #3c3c3c;
+  --g-accent-hover: #5a5a5a;
+  --g-accent-deep: #2c2c2c;
+  --g-on-accent: #ffffff;
+  --g-accent-text: #3161a9;
+  --g-accent-text-hover: #4a7bc8;
+  --g-signal: #aa4433;
+  --g-signal-text: #aa4433;
+  --g-success-text: #3d7a1e;
+  --g-warning-text: #8a5a00;
+
+  --g-paper: #ffffff;
+  --g-bg: #ffffff;
+  --g-bg-2: #eeeeee;
+  --g-panel: #ffffff;
+  --g-panel-2: #f3f3f3;
+  --g-border: #d4d4d4;
+  --g-border-strong: #aaaaaa;
+  --g-text: #1a1a1a;
+  --g-text-2: #444444;
+  --g-text-label: #666666;
+  --g-text-muted: #888888;
+
+  --g-selection-bg: #ddeebb;
+  --g-selection-text: #1a1a1a;
+
+  --g-grid-tint: transparent;
+  --g-grid-size: 28px;
+
+  --g-font-sans: Carlito, FreeSans, Helvetica, Arial, sans-serif;
+  --g-font-mono: ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+  --g-font-ui: var(--g-font-sans);
+  --g-heading: var(--g-font-sans);
+
+  --g-radius: 2px;
+}
+
+[data-theme="dark"] {
+  --g-accent: #5a5a5a;
+  --g-accent-hover: #6a6a6a;
+  --g-accent-deep: #444444;
+  --g-on-accent: #ffffff;
+  --g-accent-text: #7fa8e6;
+  --g-accent-text-hover: #a3c1ef;
+  --g-signal: #b5523f;
+  --g-signal-text: #f08a75;
+  --g-success-text: #8fc65a;
+  --g-warning-text: #e0a64a;
+
+  --g-paper: #ffffff;
+  --g-bg: #1b1b1b;
+  --g-bg-2: #252525;
+  --g-panel: #222222;
+  --g-panel-2: #2e2e2e;
+  --g-border: #3a3a3a;
+  --g-border-strong: #666666;
+  --g-text: #ececec;
+  --g-text-2: #bdbdbd;
+  --g-text-label: #9a9a9a;
+  --g-text-muted: #808080;
+
+  --g-selection-bg: #3e5228;
+  --g-selection-text: #eef5e3;
+
+  --g-grid-tint: transparent;
+}

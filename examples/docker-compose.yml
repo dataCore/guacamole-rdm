@@ -1,0 +1,159 @@
+# guacamole-rdm — complete example to try it out locally.
+#
+#   cp .env.example .env        # set POSTGRES_PASSWORD
+#   docker compose up -d --wait
+#   open http://localhost:8080/            (tree + tabs)
+#        http://localhost:8080/guacamole/  (Guacamole's own UI and admin)
+#
+# Login: guacadmin / guacadmin — change it at once in /guacamole/ (Settings →
+# Preferences). Add connections there; they show up in the tree.
+#
+# Layout: one origin, a reverse proxy in front. /guacamole goes to Guacamole
+# (its default context), everything else to guacamole-rdm. Same origin is
+# required: the SPA shares Guacamole's login and calls its API and tunnels.
+#
+# For production put TLS in front (or give Traefik a certificate resolver),
+# pin versions in .env and restrict who can reach port 8080.
+
+services:
+  # Writes the schema of exactly the Guacamole version in use into a volume
+  # that postgres applies on its first start (empty volume) only.
+  initdb:
+    image: guacamole/guacamole:${GUACAMOLE_VERSION:-1.6.0}
+    user: "0:0"
+    entrypoint: ["sh", "-c", "[ -s /initdb/01-schema.sql ] || /opt/guacamole/bin/initdb.sh --postgresql > /initdb/01-schema.sql"]
+    volumes:
+      - initdb:/initdb
+    restart: "no"
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    environment:
+      - POSTGRES_DB=guacamole
+      - POSTGRES_USER=guacamole
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - initdb:/docker-entrypoint-initdb.d:ro
+    depends_on:
+      initdb:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -U guacamole -d guacamole"]
+      interval: 10s
+      retries: 10
+    networks: [backend]
+    read_only: true
+    tmpfs: [/tmp, /var/run/postgresql]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  guacd:
+    image: guacamole/guacd:${GUACAMOLE_VERSION:-1.6.0}
+    environment:
+      # Read-only root fs: fontconfig cache on the tmpfs.
+      - XDG_CACHE_HOME=/tmp/.cache
+    healthcheck:
+      # The image's own check runs only every 5 minutes.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4822"]
+      interval: 30s
+    # backend: Guacamole → guacd; egress: guacd → your RDP/VNC/SSH targets.
+    networks: [backend, egress]
+    read_only: true
+    tmpfs:
+      - /tmp
+      # FreeRDP needs a writable $HOME, or every RDP connection fails with
+      # "Security negotiation failed (wrong security type?)".
+      - /home/guacd:uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  guacamole:
+    image: guacamole/guacamole:${GUACAMOLE_VERSION:-1.6.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - GUACD_HOSTNAME=guacd
+      - POSTGRESQL_HOSTNAME=postgres
+      - POSTGRESQL_DATABASE=guacamole
+      - POSTGRESQL_USERNAME=guacamole
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Behind the proxy: log and ban by the browser's address. Tomcat's
+      # default trusts private ranges; adjust REMOTE_IP_VALVE_INTERNAL_PROXIES
+      # if your proxy is elsewhere.
+      - REMOTE_IP_VALVE_ENABLED=true
+      # Optional SSO (OpenID Connect, implicit flow, public client). The
+      # client needs the redirect URIs https://<host>/ and
+      # https://<host>/guacamole/. Uncomment and fill in:
+      # - OPENID_AUTHORIZATION_ENDPOINT=https://idp.example/realms/x/protocol/openid-connect/auth
+      # - OPENID_JWKS_ENDPOINT=https://idp.example/realms/x/protocol/openid-connect/certs
+      # - OPENID_ISSUER=https://idp.example/realms/x
+      # - OPENID_CLIENT_ID=guacamole
+      # - OPENID_REDIRECT_URI=https://<host>/guacamole/
+      # - EXTENSION_PRIORITY=openid
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/guacamole/ >/dev/null"]
+      interval: 30s
+      start_period: 60s
+    networks: [backend, frontend]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.guacamole.rule=PathPrefix(`/guacamole`)"
+      - "traefik.http.routers.guacamole.entrypoints=web"
+      - "traefik.http.services.guacamole.loadbalancer.server.port=8080"
+    read_only: true
+    tmpfs: [/tmp:size=256m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  rdm:
+    image: ${RDM_IMAGE:-ghcr.io/datacore/guacamole-rdm:latest}
+    environment:
+      - RDM_TITLE=${RDM_TITLE:-Remote}
+      - RDM_LANGUAGE=${RDM_LANGUAGE:-auto}
+      # RDM_GUACAMOLE_URL defaults to /guacamole/; RDM_THEME to "default".
+    # Your own theme: mount it and set RDM_THEME (see README, Theming).
+    # volumes:
+    #   - ./themes/corporate:/usr/share/nginx/html/themes/corporate:ro
+    networks: [frontend]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rdm.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.rdm.entrypoints=web"
+      - "traefik.http.services.rdm.loadbalancer.server.port=8080"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  # The reverse proxy. Only the containers of this file, nothing else.
+  traefik:
+    image: traefik:${TRAEFIK_VERSION:-v3}
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME:-examples}_frontend
+      - --entrypoints.web.address=:8080
+    ports:
+      - "${LISTEN:-127.0.0.1:8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [frontend]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+networks:
+  backend:
+    internal: true
+  frontend:
+  egress:
+
+volumes:
+  initdb:
+  postgres-data:

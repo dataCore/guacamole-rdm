@@ -1,0 +1,79 @@
+# Local development backend: a plain Guacamole stack plus an SSH target, so the
+# SPA (npm run dev) has something real to talk to. Vite proxies /guacamole/
+# (Guacamole's default context, as in production) to 127.0.0.1:18080.
+#
+#   docker compose -f deploy/dev/docker-compose.yml up -d --wait
+#   sh deploy/dev/seed.sh            # demo folders + connections
+#
+# Login: guacadmin / guacadmin (local form; OIDC is off unless DEV_OIDC=true).
+# Never expose this stack — it runs with the schema's default admin password.
+
+name: guacamole-rdm-dev
+
+services:
+  # Writes the schema of exactly the Guacamole version in use into a volume
+  # that postgres applies on its first start. Avoids vendoring a SQL file.
+  initdb:
+    image: guacamole/guacamole:${GUACAMOLE_VERSION:-1.6.0}
+    user: "0:0"
+    entrypoint: ["sh", "-c", "[ -s /initdb/01-schema.sql ] || /opt/guacamole/bin/initdb.sh --postgresql > /initdb/01-schema.sql"]
+    volumes:
+      - initdb:/initdb
+    restart: "no"
+
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      - POSTGRES_DB=guacamole
+      - POSTGRES_USER=guacamole
+      - POSTGRES_PASSWORD=devpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - initdb:/docker-entrypoint-initdb.d:ro
+    depends_on:
+      initdb:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -U guacamole -d guacamole"]
+      interval: 5s
+      retries: 10
+
+  guacd:
+    image: guacamole/guacd:${GUACAMOLE_VERSION:-1.6.0}
+
+  guacamole:
+    image: guacamole/guacamole:${GUACAMOLE_VERSION:-1.6.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - GUACD_HOSTNAME=guacd
+      - POSTGRESQL_HOSTNAME=postgres
+      - POSTGRESQL_DATABASE=guacamole
+      - POSTGRESQL_USERNAME=guacamole
+      - POSTGRESQL_PASSWORD=devpassword
+      - OPENID_ENABLED=${DEV_OIDC:-false}
+      - OPENID_AUTHORIZATION_ENDPOINT=${DEV_OIDC_AUTHORITY:-https://keycloak.example.com/realms/example}/protocol/openid-connect/auth
+      - OPENID_JWKS_ENDPOINT=${DEV_OIDC_AUTHORITY:-https://keycloak.example.com/realms/example}/protocol/openid-connect/certs
+      - OPENID_ISSUER=${DEV_OIDC_AUTHORITY:-https://keycloak.example.com/realms/example}
+      - OPENID_CLIENT_ID=${DEV_OIDC_CLIENT_ID:-CHANGEME}
+      - OPENID_REDIRECT_URI=http://127.0.0.1:18080/guacamole/
+      - EXTENSION_PRIORITY=${DEV_EXTENSION_PRIORITY:-postgresql}
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/guacamole/ >/dev/null"]
+      interval: 5s
+      retries: 30
+
+  # SSH target for the demo connections (user test / password test).
+  ssh:
+    image: lscr.io/linuxserver/openssh-server:latest
+    environment:
+      - PASSWORD_ACCESS=true
+      - USER_NAME=test
+      - USER_PASSWORD=test
+
+volumes:
+  initdb:
+  postgres_data:

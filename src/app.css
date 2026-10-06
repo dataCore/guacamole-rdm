@@ -1,0 +1,134 @@
+/* Layout and base styles. Colours, fonts and the grid come exclusively from
+   the --g-* tokens of the active theme (public/themes/<name>/theme.css); no
+   colour literal belongs here, except the black behind a remote display,
+   which is the remote desktop's own colour.
+
+   Optional tokens fall back to required ones, so a theme only needs to
+   define them to differ: --g-on-accent (text on accent fills, default
+   --g-paper), --g-font-ui (labels, tabs, buttons, default --g-font-mono),
+   --g-selection-bg / --g-selection-text (selected tree row, default accent). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--g-bg);
+  color: var(--g-text);
+  font-family: var(--g-font-sans);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--g-accent-text);
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--g-accent-text);
+  outline-offset: -2px;
+}
+
+.g-grid-paper {
+  background-color: var(--g-bg);
+  background-image:
+    linear-gradient(var(--g-grid-tint) 1px, transparent 1px),
+    linear-gradient(90deg, var(--g-grid-tint) 1px, transparent 1px);
+  background-size: var(--g-grid-size) var(--g-grid-size);
+}
+
+/* Square icon button, borders instead of shadows (Corporate Design v2). */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--g-radius);
+  background: transparent;
+  color: var(--g-text-2);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  border-color: var(--g-border);
+  background: var(--g-panel);
+  color: var(--g-accent-text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--g-accent);
+  border-radius: var(--g-radius);
+  background: var(--g-accent);
+  color: var(--g-on-accent, var(--g-paper));
+  font-family: var(--g-font-ui, var(--g-font-mono));
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--g-accent-hover);
+  border-color: var(--g-accent-hover);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--g-accent-text);
+}
+
+.btn.ghost:hover {
+  background: var(--g-panel-2);
+}
+
+.label {
+  font-family: var(--g-font-ui, var(--g-font-mono));
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--g-text-label);
+}
+
+/* The remote display: Guacamole positions its layers absolutely inside. */
+.session-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.session-display > div {
+  flex: none;
+}

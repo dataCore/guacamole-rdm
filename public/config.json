@@ -1,0 +1,7 @@
+{
+  "title": "Remote",
+  "guacamoleUrl": "/guacamole/",
+  "autoSso": true,
+  "theme": "default",
+  "language": "auto"
+}
