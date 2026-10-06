@@ -51,6 +51,12 @@ export const en: Messages = {
     ctrlAltDel: 'Send Ctrl+Alt+Del',
     disconnect: 'Disconnect',
     confirmLeave: 'Sessions are still open.',
+    clipboard: 'Clipboard',
+  },
+  clipboard: {
+    hint: 'Text from here goes to the clipboard of the remote end; what the remote end copies shows up here. For browsers that do not let the app read the clipboard.',
+    send: 'Send to remote end',
+    close: 'Close',
   },
   session: {
     connecting: 'Connecting …',
@@ -58,6 +64,10 @@ export const en: Messages = {
     disconnected: 'Disconnected.',
     reconnect: 'Reconnect',
     close: 'Close tab',
+    reconnectIn: (seconds: number) => `Retrying in ${seconds} s …`,
+    reconnectNow: 'Connect now',
+    stayDisconnected: 'Do not reconnect',
+    unstable: 'The connection is unstable, waiting for the gateway …',
     credentials: {
       title: 'Sign in to the remote system',
       hint: 'The remote system asks for credentials. They are used for this connection only and are not stored.',

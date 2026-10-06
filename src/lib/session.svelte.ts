@@ -1,5 +1,6 @@
 import { credentialFields, type CredentialField } from './credentials';
 import { statusMessage, t } from './i18n';
+import { RECONNECT_DELAY, shouldAutoReconnect, streamDownloadUrl, type FailureSource } from './streams';
 import type { ConnectionNode } from './tree';
 
 export type SessionState = 'connecting' | 'waiting' | 'connected' | 'disconnected' | 'error';
@@ -12,6 +13,11 @@ const KEYSYM_DELETE = 0xffff;
 /** Status codes that can mean either "the target rejected the credentials"
  *  or "the Guacamole login is gone". The app checks which one it was. */
 const AUTH_STATUS = new Set([0x0301, 0x0303]);
+
+/** Audio input as Guacamole's own client sends it. The browser asks for the
+ *  microphone only once guacd accepts the stream, i.e. only for connections
+ *  with audio input enabled. */
+const AUDIO_INPUT_MIMETYPE = 'audio/L16;rate=44100,channels=2';
 
 let nextId = 1;
 
@@ -37,6 +43,12 @@ export class Session {
   /** Parameters guacd is waiting for (credentials the connection does not
    *  store), or null. The session stays "waiting" until they are sent. */
   required = $state<CredentialField[] | null>(null);
+  /** The tunnel has not heard from the server for a while; it may recover. */
+  unstable = $state(false);
+  /** Seconds until an automatic reconnect after a transient failure. */
+  reconnectIn = $state<number | null>(null);
+  /** Last text exchanged through the clipboard, either direction. */
+  clipboard = $state('');
 
   readonly element: HTMLDivElement;
   #client: Guacamole.Client | null = null;
@@ -44,6 +56,7 @@ export class Session {
   #observer: ResizeObserver | null = null;
   #resizeTimer: ReturnType<typeof setTimeout> | undefined;
   #lastClipboard: string | null = null;
+  #reconnectTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     readonly node: ConnectionNode,
@@ -96,8 +109,13 @@ export class Session {
 
     // A late error of a replaced client (reconnect) must not tear down the
     // new one, nor trigger an auth check for a tab that is gone.
-    tunnel.onerror = (status) => this.#client === client && this.#fail(status);
-    client.onerror = (status) => this.#client === client && this.#fail(status);
+    tunnel.onerror = (status) => this.#client === client && this.#fail(status, 'tunnel');
+    client.onerror = (status) => this.#client === client && this.#fail(status, 'client');
+    tunnel.onstatechange = (state) => {
+      if (this.#client !== client) return;
+      if (state === Guacamole.Tunnel.State.UNSTABLE) this.unstable = true;
+      else if (state === Guacamole.Tunnel.State.OPEN) this.unstable = false;
+    };
     client.onname = (name) => (this.remoteName = name);
     client.onrequired = (parameters) => {
       if (this.#client !== client) return;
@@ -119,6 +137,7 @@ export class Session {
           // remote end has drawn something; until then keep "waiting".
           this.state = client.getDisplay().getWidth() > 0 ? 'connected' : 'waiting';
           this.#scheduleResize();
+          this.#requestAudioInput(client);
           break;
         case 5:
           if (this.state !== 'error') this.state = 'disconnected';
@@ -126,6 +145,7 @@ export class Session {
       }
     };
     client.onclipboard = (stream, mimetype) => this.#receiveClipboard(stream, mimetype);
+    client.onfile = (stream, _mimetype, filename) => this.#download(tunnel, stream, filename);
 
     const display = client.getDisplay();
     const displayElement = display.getElement();
@@ -168,6 +188,12 @@ export class Session {
     this.state = 'disconnected';
   }
 
+  /** Keep the failure on screen instead of reconnecting by itself. */
+  cancelReconnect(): void {
+    clearInterval(this.#reconnectTimer);
+    this.reconnectIn = null;
+  }
+
   /** Answer guacd's "required" request. Each value goes out as an argument
    *  value stream, as in Guacamole's own client; nothing is kept here. */
   submitCredentials(values: Record<string, string>): void {
@@ -185,6 +211,7 @@ export class Session {
   /** Close for good: called when the tab goes away. */
   dispose(): void {
     clearTimeout(this.#resizeTimer);
+    this.cancelReconnect();
     this.#teardown();
     this.detach();
   }
@@ -201,8 +228,16 @@ export class Session {
   /** Local clipboard to the remote end; skipped when nothing changed, so
    *  focusing a tab does not resend the same text over and over. */
   pushClipboard(text: string): void {
-    if (!this.#client || this.state !== 'connected' || text === this.#lastClipboard) return;
+    if (text === this.#lastClipboard) return;
+    this.sendClipboard(text);
+  }
+
+  /** Send text to the remote clipboard unconditionally (the manual field,
+   *  for browsers that do not let the app read the local clipboard). */
+  sendClipboard(text: string): void {
+    if (!this.#client || this.state !== 'connected') return;
     this.#lastClipboard = text;
+    this.clipboard = text;
     const writer = new Guacamole.StringWriter(this.#client.createClipboardStream('text/plain'));
     writer.sendText(text);
     writer.sendEnd();
@@ -218,16 +253,60 @@ export class Session {
     reader.ontext = (chunk) => (text += chunk);
     reader.onend = () => {
       this.#lastClipboard = text;
+      this.clipboard = text;
       navigator.clipboard?.writeText(text).catch(() => undefined);
     };
   }
 
-  #fail(status: Guacamole.Status): void {
+  /** A file the remote end offers (RDP drive "Download" folder, SFTP,
+   *  guacctl): the browser fetches it from Guacamole's REST API, which
+   *  intercepts the stream. Without a handler guacamole-common-js refuses
+   *  the transfer silently. */
+  #download(tunnel: Guacamole.Tunnel, stream: Guacamole.InputStream, filename: string): void {
+    const token = this.context.token();
+    if (!tunnel.uuid || !token) {
+      stream.sendAck('Download not possible', 0x0201);
+      return;
+    }
+    // Guacamole consumes the stream on the server; anything that still
+    // arrives here is acknowledged and dropped.
+    stream.onblob = () => stream.sendAck('OK', 0x0000);
+    const link = document.createElement('a');
+    link.href = streamDownloadUrl(this.context.base, tunnel.uuid, stream.index, filename, token);
+    link.download = filename;
+    link.rel = 'noopener';
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
+  /** One audio input stream at a time, re-requested whenever it closes, as
+   *  in Guacamole's own client. */
+  #requestAudioInput(client: Guacamole.Client): void {
+    if (this.#client !== client) return;
+    const stream = client.createAudioStream(AUDIO_INPUT_MIMETYPE);
+    const recorder = Guacamole.AudioRecorder.getInstance(stream, AUDIO_INPUT_MIMETYPE);
+    if (!recorder) stream.sendEnd();
+    else recorder.onclose = () => this.#requestAudioInput(client);
+  }
+
+  #fail(status: Guacamole.Status, source: FailureSource): void {
     if (this.state === 'error') return;
     if (AUTH_STATUS.has(status.code)) this.context.verifyAuth();
     this.error = { code: status.code, message: status.message ?? null };
     this.state = 'error';
     this.#teardown();
+    if (shouldAutoReconnect(status.code, source)) this.#startReconnect();
+  }
+
+  #startReconnect(): void {
+    this.cancelReconnect();
+    this.reconnectIn = RECONNECT_DELAY;
+    this.#reconnectTimer = setInterval(() => {
+      if (this.reconnectIn === null) return;
+      if (this.reconnectIn > 1) this.reconnectIn -= 1;
+      else this.connect();
+    }, 1000);
   }
 
   #targetSize(): { width: number; height: number; dpi: number } {
@@ -266,6 +345,8 @@ export class Session {
     const client = this.#client;
     this.#client = null;
     this.required = null;
+    this.unstable = false;
+    this.cancelReconnect();
     // The old mouse stays bound to the old display element, which is
     // replaced on reconnect; its handler ignores events of a stale client.
     client?.disconnect();

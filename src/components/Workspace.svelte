@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import ClipboardIcon from '@lucide/svelte/icons/clipboard';
   import Keyboard from '@lucide/svelte/icons/keyboard';
   import Maximize from '@lucide/svelte/icons/maximize';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -8,6 +9,7 @@
   import { t } from '../lib/i18n';
   import { sessionStateLabel, type Session } from '../lib/session.svelte';
   import type { SessionManager } from '../lib/sessions.svelte';
+  import ClipboardPanel from './ClipboardPanel.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import CredentialPrompt from './CredentialPrompt.svelte';
   import ProtocolIcon from './ProtocolIcon.svelte';
@@ -23,6 +25,8 @@
   let typingTo: Session | null = null;
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   let dragId: string | null = null;
+  /** Session whose clipboard panel is open, if any. */
+  let clipboardFor = $state<string | null>(null);
 
   const active = $derived(manager.active);
 
@@ -143,6 +147,16 @@
         <button class="icon-btn" title={t.tabs.ctrlAltDel} aria-label={t.tabs.ctrlAltDel} onclick={() => active.sendCtrlAltDel()} disabled={active.state !== 'connected'}>
           <Keyboard size={16} />
         </button>
+        <button
+          class="icon-btn"
+          class:on={clipboardFor === active.id}
+          title={t.tabs.clipboard}
+          aria-label={t.tabs.clipboard}
+          aria-expanded={clipboardFor === active.id}
+          onclick={() => (clipboardFor = clipboardFor === active.id ? null : active.id)}
+        >
+          <ClipboardIcon size={16} />
+        </button>
         <button class="icon-btn" title={t.tabs.reconnect} aria-label={t.tabs.reconnect} onclick={() => active.connect()}>
           <RotateCcw size={16} />
         </button>
@@ -167,7 +181,13 @@
               <div class="overlay-box" class:error={session.state === 'error'}>
                 <div class="label">{session.title}</div>
                 <p>{sessionStateLabel(session)}</p>
-                {#if session.state === 'error' || session.state === 'disconnected'}
+                {#if session.reconnectIn !== null}
+                  <p class="countdown">{t.session.reconnectIn(session.reconnectIn)}</p>
+                  <div class="overlay-actions">
+                    <button class="btn" onclick={() => session.connect()}>{t.session.reconnectNow}</button>
+                    <button class="btn ghost" onclick={() => session.cancelReconnect()}>{t.session.stayDisconnected}</button>
+                  </div>
+                {:else if session.state === 'error' || session.state === 'disconnected'}
                   <div class="overlay-actions">
                     <button class="btn" onclick={() => session.connect()}>{t.session.reconnect}</button>
                     <button class="btn ghost" onclick={() => manager.close(session.id)}>{t.session.close}</button>
@@ -186,6 +206,16 @@
         </div>
       {/if}
     </div>
+
+    {#if active?.unstable}
+      <div class="notice" role="status">{t.session.unstable}</div>
+    {/if}
+
+    {#if active && clipboardFor === active.id}
+      {#key active.id}
+        <ClipboardPanel session={active} onClose={() => (clipboardFor = null)} />
+      {/key}
+    {/if}
 
     <!-- Outside the viewport on purpose: its Guacamole.Keyboard listens in the
          capture phase and would swallow every key typed into the form. Only
@@ -363,6 +393,34 @@
 
   .overlay-box p {
     margin: 6px 0 0;
+  }
+
+  .countdown {
+    color: var(--g-text-2);
+    font-family: var(--g-font-ui, var(--g-font-mono));
+    font-size: 12.5px;
+  }
+
+  .notice {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    max-width: calc(100% - 16px);
+    padding: 6px 12px;
+    border: 1px solid var(--g-border);
+    border-left: 3px solid var(--g-warning-text);
+    background: var(--g-panel);
+    color: var(--g-text);
+    font-size: 12.5px;
+    pointer-events: none;
+  }
+
+  .icon-btn.on {
+    border-color: var(--g-border);
+    background: var(--g-panel);
+    color: var(--g-accent-text);
   }
 
   .overlay-actions {

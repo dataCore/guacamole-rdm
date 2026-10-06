@@ -50,6 +50,12 @@ export const de = {
     ctrlAltDel: 'Strg+Alt+Entf senden',
     disconnect: 'Trennen',
     confirmLeave: 'Es sind noch Sitzungen offen.',
+    clipboard: 'Zwischenablage',
+  },
+  clipboard: {
+    hint: 'Text von hier geht an die Zwischenablage der Gegenstelle; was die Gegenstelle kopiert, erscheint hier. Für Browser, die das Lesen der Zwischenablage nicht erlauben.',
+    send: 'An Gegenstelle senden',
+    close: 'Schliessen',
   },
   session: {
     connecting: 'Verbinde …',
@@ -57,6 +63,10 @@ export const de = {
     disconnected: 'Verbindung getrennt.',
     reconnect: 'Neu verbinden',
     close: 'Tab schliessen',
+    reconnectIn: (seconds: number) => `Neuer Versuch in ${seconds} s …`,
+    reconnectNow: 'Jetzt verbinden',
+    stayDisconnected: 'Nicht automatisch verbinden',
+    unstable: 'Die Verbindung ist instabil, warte auf das Gateway …',
     credentials: {
       title: 'Anmeldung am Zielsystem',
       hint: 'Das Zielsystem verlangt Zugangsdaten. Sie werden nur für diese Verbindung verwendet und nicht gespeichert.',

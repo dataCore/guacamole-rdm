@@ -1,7 +1,8 @@
 #!/bin/sh
 # Seeds the dev stack with a small folder tree and SSH connections to the
-# bundled target. Idempotent enough for dev: re-running adds duplicates only
-# where Guacamole allows them (it rejects same name in same folder).
+# bundled target (SFTP on, so `guacctl -d <file>` tests downloads).
+# Idempotent enough for dev: re-running adds duplicates only where Guacamole
+# allows them (it rejects same name in same folder).
 set -eu
 BASE="${BASE:-http://127.0.0.1:18080/guacamole}"
 TOKEN=$(curl -fsS -X POST -d 'username=guacadmin&password=guacadmin' "$BASE/api/tokens" \
@@ -12,7 +13,7 @@ post() { curl -sS -X POST -H "Guacamole-Token: $TOKEN" -H 'Content-Type: applica
 group() { post connectionGroups "{\"parentIdentifier\":\"$2\",\"name\":\"$1\",\"type\":\"ORGANIZATIONAL\",\"attributes\":{}}" \
   | sed -n 's/.*"identifier":"\([^"]*\)".*/\1/p'; }
 ssh_conn() {
-  post connections "{\"parentIdentifier\":\"$2\",\"name\":\"$1\",\"protocol\":\"ssh\",\"parameters\":{\"hostname\":\"ssh\",\"port\":\"2222\",\"username\":\"test\",\"password\":\"test\"},\"attributes\":{}}" >/dev/null
+  post connections "{\"parentIdentifier\":\"$2\",\"name\":\"$1\",\"protocol\":\"ssh\",\"parameters\":{\"hostname\":\"ssh\",\"port\":\"2222\",\"username\":\"test\",\"password\":\"test\",\"enable-sftp\":\"true\"},\"attributes\":{}}" >/dev/null
 }
 
 SITEA=$(group "Site A" ROOT)

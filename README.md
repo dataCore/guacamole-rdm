@@ -54,6 +54,10 @@ are Guacamole *connection groups*.
 - Display follows the window size (dynamic resize where the protocol supports
   it), HiDPI-aware; fullscreen; Ctrl+Alt+Del; clipboard both ways (where the
   browser allows clipboard access).
+- Downloads of files the remote end offers (RDP drive, SFTP via
+  `guacctl -d`); automatic reconnect after transient failures; a notice
+  while the connection is unstable; a clipboard field for browsers that do
+  not allow clipboard access; microphone input (HTTPS) where enabled.
 - Credential prompt: when a connection stores no credentials and the remote
   end needs them (RDP with NLA, VNC password), the tab asks for them;
   nothing is stored.
@@ -64,10 +68,9 @@ are Guacamole *connection groups*.
 ### Not (yet) covered
 
 Guacamole's own client view does more than this front end. Missing so far:
-file transfer (upload, download, file browser for SFTP and RDP drives),
-touch input and on-screen keyboard, microphone input, automatic reconnect,
-a notice for an unstable tunnel, session sharing links and changing
-connection parameters at runtime. For those, open the connection in
+upload and the file browser for SFTP and RDP drives, touch input and
+on-screen keyboard, session sharing links and changing connection
+parameters at runtime. For those, open the connection in
 Guacamole's own UI (`/guacamole/`). Changes per release: `CHANGELOG.md`.
 
 ## Deployment

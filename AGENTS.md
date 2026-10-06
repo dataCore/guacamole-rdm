@@ -45,6 +45,12 @@ that are not obvious from the code.
   The credential prompt therefore sits in `.stage` next to the viewport, and
   only the tab in front shows it. The keyboard is reset when the window or
   the viewport loses focus, so no key stays pressed on the remote end.
+- **Follow Guacamole's own client where it defines behaviour:** downloads go
+  through `api/session/tunnels/{uuid}/streams/{index}/{name}?token=` (the
+  browser fetches them, so the token is in the query); automatic reconnect
+  uses the status codes of Guacamole 1.6 (`src/lib/streams.ts`); audio
+  input is requested on every connect and only becomes a microphone request
+  once guacd accepts the stream.
 - **The image is neutral:** only the `default` theme (close to Guacamole's own
   look, system fonts), no corporate fonts or logos. Installations mount their
   own theme; the app styles itself only through the `--g-*` tokens documented
