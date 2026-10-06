@@ -173,3 +173,8 @@ Checks (also run in CI): `npm run check` (types, warnings are errors) and
 
 MIT, see `LICENSE`. Apache Guacamole and `guacamole-common-js` (loaded at runtime
 from your Guacamole server) are Apache-2.0; the bundled IBM Plex fonts are OFL-1.1.
+
+## How it was built
+
+This project was developed with [Claude Code](https://claude.com/claude-code),
+Anthropic's agentic coding tool, and reviewed and tested by the maintainers.
