@@ -52,8 +52,9 @@ are Guacamole *connection groups*.
   opens a second one; drag to reorder; close, close others, reconnect.
 - Every tab keeps its connection while in the background; switching is instant.
 - Display follows the window size (dynamic resize where the protocol supports
-  it), HiDPI-aware; fullscreen; Ctrl+Alt+Del; clipboard both ways (where the
-  browser allows clipboard access).
+  it), HiDPI-aware; fullscreen; Ctrl+Alt+Del; clipboard both ways (local
+  text reaches the remote end on connect, on focus and on Ctrl+V /
+  Shift+Insert).
 - Downloads of files the remote end offers (RDP drive, SFTP via
   `guacctl -d`); automatic reconnect after transient failures; a notice
   while the connection is unstable; a clipboard field for browsers that do

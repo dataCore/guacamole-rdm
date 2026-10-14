@@ -91,6 +91,8 @@ export class Session {
     this.#teardown();
     this.state = 'connecting';
     this.error = null;
+    // A new connection starts with an empty remote clipboard.
+    this.#lastClipboard = null;
 
     const token = this.context.token();
     if (!token) {
@@ -135,7 +137,8 @@ export class Session {
           // Guacamole reports CONNECTED once guacd has accepted the session,
           // which for RDP is before the target answers. Green only once the
           // remote end has drawn something; until then keep "waiting".
-          this.state = client.getDisplay().getWidth() > 0 ? 'connected' : 'waiting';
+          if (client.getDisplay().getWidth() > 0) this.#markConnected();
+          else this.state = 'waiting';
           this.#scheduleResize();
           this.#requestAudioInput(client);
           break;
@@ -151,7 +154,7 @@ export class Session {
     const displayElement = display.getElement();
     this.element.replaceChildren(displayElement);
     display.onresize = (width) => {
-      if (width > 0 && this.state === 'waiting' && this.#client === client) this.state = 'connected';
+      if (width > 0 && this.state === 'waiting' && this.#client === client) this.#markConnected();
       this.#rescale();
     };
 
@@ -225,6 +228,17 @@ export class Session {
     for (const keysym of [KEYSYM_DELETE, KEYSYM_ALT_L, KEYSYM_CTRL_L]) this.sendKey(false, keysym);
   }
 
+  /** Read the local clipboard and hand it to the remote end. Needs the
+   *  clipboard-read permission and a focused document; when the browser
+   *  refuses, the paste event and the clipboard field remain. */
+  syncLocalClipboard(): void {
+    if (this.state !== 'connected' || !navigator.clipboard?.readText) return;
+    navigator.clipboard.readText().then(
+      (text) => this.pushClipboard(text),
+      (error: unknown) => console.debug('Local clipboard not readable:', error),
+    );
+  }
+
   /** Local clipboard to the remote end; skipped when nothing changed, so
    *  focusing a tab does not resend the same text over and over. */
   pushClipboard(text: string): void {
@@ -288,6 +302,15 @@ export class Session {
     const recorder = Guacamole.AudioRecorder.getInstance(stream, AUDIO_INPUT_MIMETYPE);
     if (!recorder) stream.sendEnd();
     else recorder.onclose = () => this.#requestAudioInput(client);
+  }
+
+  /** First frame drawn: the remote end can take the local clipboard now.
+   *  Earlier sends would be dropped, so text copied before connecting
+   *  would never arrive. */
+  #markConnected(): void {
+    if (this.state === 'connected') return;
+    this.state = 'connected';
+    this.syncLocalClipboard();
   }
 
   #fail(status: Guacamole.Status, source: FailureSource): void {

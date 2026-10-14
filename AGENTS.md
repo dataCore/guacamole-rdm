@@ -45,6 +45,11 @@ that are not obvious from the code.
   The credential prompt therefore sits in `.stage` next to the viewport, and
   only the tab in front shows it. The keyboard is reset when the window or
   the viewport loses focus, so no key stays pressed on the remote end.
+- **Local clipboard to the remote end** on connect (first frame), on focus
+  and visibility, and on paste: Ctrl+V / Shift+Insert are held back until
+  the browser's `paste` event has sent the text (no permission needed), then
+  released in order with any keys typed meanwhile; a short timer releases
+  them if no paste event comes.
 - **Follow Guacamole's own client where it defines behaviour:** downloads go
   through `api/session/tunnels/{uuid}/streams/{index}/{name}?token=` (the
   browser fetches them, so the token is in the query); automatic reconnect

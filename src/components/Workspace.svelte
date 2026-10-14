@@ -30,19 +30,72 @@
 
   const active = $derived(manager.active);
 
+  const KEYSYM_V = 0x76;
+  const KEYSYM_V_UPPER = 0x56;
+  const KEYSYM_INSERT = 0xff63;
+  /** How long a paste chord waits for the browser's paste event. */
+  const PASTE_WAIT_MS = 200;
+
+  /** Key events held back while a paste chord waits for the paste event,
+   *  in order; null when nothing is held. */
+  let held: (() => void)[] | null = null;
+  let heldTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Ctrl+V or Shift+Insert: the remote end pastes from its own clipboard,
+   *  so the local one has to arrive there first. */
+  function isPasteChord(keysym: number): boolean {
+    const modifiers = keyboard!.modifiers;
+    if (modifiers.ctrl && (keysym === KEYSYM_V || keysym === KEYSYM_V_UPPER)) return true;
+    return modifiers.shift && keysym === KEYSYM_INSERT;
+  }
+
+  function releaseHeld(): void {
+    clearTimeout(heldTimer);
+    const events = held ?? [];
+    held = null;
+    for (const send of events) send();
+  }
+
+  /** The browser's paste event carries the local clipboard without any
+   *  permission. Its text goes to the remote end before the held paste
+   *  chord, so the remote paste sees it. */
+  function onPaste(event: ClipboardEvent): void {
+    event.preventDefault();
+    const text = event.clipboardData?.getData('text/plain');
+    if (text) typingTo?.pushClipboard(text);
+    releaseHeld();
+  }
+
   onMount(() => {
     // One keyboard for the viewport, routed to whichever tab is in front.
     // Bound to the viewport, not the document, so typing in the tree search
     // never reaches a remote machine.
     keyboard = new Guacamole.Keyboard(viewport);
     keyboard.onkeydown = (keysym) => {
-      typingTo?.sendKey(true, keysym);
+      const target = typingTo;
+      if (held) {
+        held.push(() => target?.sendKey(true, keysym));
+        return false;
+      }
+      if (target?.state === 'connected' && isPasteChord(keysym)) {
+        // Let the browser act on the chord: it fires the paste event, which
+        // releases the chord. Without one (nothing to paste), the timer does.
+        held = [() => target.sendKey(true, keysym)];
+        heldTimer = setTimeout(releaseHeld, PASTE_WAIT_MS);
+        return true;
+      }
+      target?.sendKey(true, keysym);
       return false;
     };
-    keyboard.onkeyup = (keysym) => typingTo?.sendKey(false, keysym);
+    keyboard.onkeyup = (keysym) => {
+      const target = typingTo;
+      if (held) held.push(() => target?.sendKey(false, keysym));
+      else target?.sendKey(false, keysym);
+    };
   });
 
   onDestroy(() => {
+    clearTimeout(heldTimer);
     keyboard?.reset();
     if (keyboard) keyboard.onkeydown = keyboard.onkeyup = null;
   });
@@ -59,14 +112,9 @@
   });
 
   /** Local clipboard to the remote side when the user comes back to the
-   *  session. Needs clipboard-read permission; silently skipped otherwise. */
+   *  session (window, tab or viewport). */
   function syncClipboard(): void {
-    const session = manager.active;
-    if (!session || !navigator.clipboard?.readText) return;
-    navigator.clipboard.readText().then(
-      (text) => session.pushClipboard(text),
-      () => undefined,
-    );
+    manager.active?.syncLocalClipboard();
   }
 
   function host(session: Session) {
@@ -105,6 +153,7 @@
      send their key-up to the viewport; release them so no modifier stays
      pressed on the remote end. -->
 <svelte:window onfocus={syncClipboard} onblur={() => keyboard?.reset()} />
+<svelte:document onvisibilitychange={() => document.visibilityState === 'visible' && syncClipboard()} />
 
 <section class="workspace" bind:this={frame}>
   <div class="tabbar" role="tablist">
@@ -173,7 +222,7 @@
   <div class="stage">
     <!-- The viewport takes the keyboard; Guacamole handles mouse and keys. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex (the remote desktop needs focus for the keyboard) -->
-    <div role="application" class="viewport" class:g-grid-paper={!active} tabindex="0" bind:this={viewport} onfocus={syncClipboard} onfocusout={() => keyboard?.reset()} onpointerdown={() => viewport.focus({ preventScroll: true })}>
+    <div role="application" class="viewport" class:g-grid-paper={!active} tabindex="0" bind:this={viewport} onfocus={syncClipboard} onpaste={onPaste} onfocusout={() => keyboard?.reset()} onpointerdown={() => viewport.focus({ preventScroll: true })}>
       {#each manager.sessions as session (session.id)}
         <div class="host" class:hidden={session.id !== manager.activeId} {@attach host(session)}>
           {#if session.state !== 'connected' && !session.required}
