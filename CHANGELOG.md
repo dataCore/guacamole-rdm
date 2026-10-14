@@ -4,6 +4,13 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.2] — 2026-10-14
+
+### Added
+
+- **Version at the foot of the sidebar** (`guacamole-rdm X.Y.Z`), taken
+  from `package.json` at build time.
+
 ## [1.1.1] — 2026-10-14
 
 ### Fixed
@@ -69,6 +76,7 @@ First public release: connection tree and session tabs in front of Apache
 Guacamole, SSO via Guacamole's OpenID Connect extension, German and English
 UI, light and dark theme, replaceable themes, hardened container image.
 
+[1.1.2]: https://github.com/dataCore/guacamole-rdm/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/dataCore/guacamole-rdm/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/dataCore/guacamole-rdm/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/dataCore/guacamole-rdm/compare/v1.0.0...v1.0.1

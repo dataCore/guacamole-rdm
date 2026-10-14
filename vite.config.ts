@@ -1,14 +1,21 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { readFileSync } from 'node:fs';
 
 // Dev only: the Guacamole backend from deploy/dev/docker-compose.yml, at its default
 // context /guacamole/ like in production. There, SPA and Guacamole share one
 // origin behind the reverse proxy, so nothing is proxied.
 const guacamole = process.env.GUACAMOLE_DEV_URL ?? 'http://127.0.0.1:18080';
 
+// The release version, shown at the foot of the sidebar.
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+
 export default defineConfig({
   plugins: [svelte()],
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   // Relative asset URLs: the same build works at / or under any prefix.
   base: './',
   build: {

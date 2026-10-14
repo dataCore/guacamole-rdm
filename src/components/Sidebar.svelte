@@ -164,6 +164,8 @@
   <p class="note">{t.tree.noMatch}</p>
 {/if}
 
+<p class="version">guacamole-rdm {__APP_VERSION__}</p>
+
 {#if menu}
   <ContextMenu {...menu} onClose={() => (menu = null)} />
 {/if}
@@ -234,6 +236,15 @@
     margin: 0;
     padding: 12px;
     color: var(--g-text-muted);
+  }
+
+  .version {
+    margin: 0;
+    padding: 4px 8px;
+    border-top: 1px solid var(--g-border);
+    font-size: 11px;
+    color: var(--g-text-muted);
+    user-select: text;
   }
 
   .note.error {
