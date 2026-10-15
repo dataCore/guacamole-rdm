@@ -4,7 +4,7 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
-## [Unreleased]
+## [1.1.3] — 2026-10-15
 
 ### Changed
 
