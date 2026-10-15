@@ -2,6 +2,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Folder from '@lucide/svelte/icons/folder';
   import FolderOpen from '@lucide/svelte/icons/folder-open';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import { t } from '../lib/i18n';
   import type { ConnectionNode, TreeNode } from '../lib/tree';
   import ProtocolIcon from './ProtocolIcon.svelte';
@@ -23,6 +24,10 @@
 
   const isOpen = $derived(node.kind === 'folder' && expanded.has(node.key));
   const tabs = $derived(node.kind === 'connection' ? openCount(node.key) : 0);
+
+  /** Pointer type of the last press on the row: a touch has no double
+   *  click, so a single tap opens the connection. */
+  let pointerType = '';
 </script>
 
 <li role="treeitem" aria-selected={selectedKey === node.key} aria-expanded={node.kind === 'folder' ? isOpen : undefined}>
@@ -32,9 +37,11 @@
     class:selected={selectedKey === node.key}
     data-key={node.key}
     style:padding-left="{6 + depth * 16}px"
+    onpointerdown={(e) => (pointerType = e.pointerType)}
     onclick={() => {
       onSelect(node);
       if (node.kind === 'folder') onToggle(node.key);
+      else if (pointerType === 'touch') onOpen(node, false);
     }}
     ondblclick={() => node.kind === 'connection' && onOpen(node, false)}
     onauxclick={(e) => e.button === 1 && node.kind === 'connection' && onOpen(node, true)}
@@ -59,6 +66,19 @@
       {#if node.activeConnections > 0}
         <span class="active" title={t.tree.active(node.activeConnections)}></span>
       {/if}
+      <!-- Touch only: iOS fires no contextmenu event on a long press. -->
+      <button
+        class="more"
+        title={t.tree.more}
+        aria-label={t.tree.more}
+        onclick={(e) => {
+          e.stopPropagation();
+          onSelect(node);
+          onMenu(node, e);
+        }}
+      >
+        <Ellipsis size={16} />
+      </button>
     {/if}
   </div>
 
@@ -92,8 +112,10 @@
     user-select: none;
   }
 
-  .row:hover {
-    background: var(--g-panel-2);
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--g-panel-2);
+    }
   }
 
   .row.selected {
@@ -144,5 +166,31 @@
     height: 7px;
     margin-left: auto;
     background: var(--g-success-text);
+  }
+
+  .more {
+    display: none;
+    flex: none;
+    margin-left: auto;
+    padding: 0 6px;
+    align-self: stretch;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    color: inherit;
+  }
+
+  .active + .more {
+    margin-left: 4px;
+  }
+
+  @media (pointer: coarse) {
+    .row {
+      height: 40px;
+    }
+
+    .more {
+      display: inline-flex;
+    }
   }
 </style>

@@ -70,10 +70,20 @@ a {
   cursor: pointer;
 }
 
-.icon-btn:hover {
-  border-color: var(--g-border);
-  background: var(--g-panel);
-  color: var(--g-accent-text);
+@media (hover: hover) {
+  .icon-btn:hover {
+    border-color: var(--g-border);
+    background: var(--g-panel);
+    color: var(--g-accent-text);
+  }
+}
+
+/* A finger needs about 40px. */
+@media (pointer: coarse) {
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 .icon-btn:disabled {

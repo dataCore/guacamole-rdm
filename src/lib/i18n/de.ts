@@ -39,9 +39,11 @@ export const de = {
     partial: 'Nicht alle Verbindungen konnten geladen werden.',
     open: 'Öffnen',
     openNew: 'In neuem Tab öffnen',
+    more: 'Weitere Aktionen',
     active: (n: number) => (n === 1 ? '1 aktive Sitzung' : `${n} aktive Sitzungen`),
   },
   tabs: {
+    more: 'Weitere Aktionen',
     close: 'Schliessen',
     closeOthers: 'Andere schliessen',
     closeAll: 'Alle schliessen',

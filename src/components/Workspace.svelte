@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import ClipboardIcon from '@lucide/svelte/icons/clipboard';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Keyboard from '@lucide/svelte/icons/keyboard';
   import Maximize from '@lucide/svelte/icons/maximize';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -29,6 +30,8 @@
   let clipboardFor = $state<string | null>(null);
 
   const active = $derived(manager.active);
+  /** iPhone Safari cannot put an element into fullscreen. */
+  const canFullscreen = document.fullscreenEnabled;
 
   const KEYSYM_V = 0x76;
   const KEYSYM_V_UPPER = 0x56;
@@ -126,9 +129,20 @@
 
   function tabMenu(session: Session, event: MouseEvent): void {
     event.preventDefault();
+    showTabMenu(session, event.clientX, event.clientY);
+  }
+
+  /** The tab menu from a button, for touch: iOS fires no contextmenu event
+   *  on a long press. Opens below the button. */
+  function tabMenuFrom(session: Session, event: MouseEvent): void {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    showTabMenu(session, rect.right, rect.bottom);
+  }
+
+  function showTabMenu(session: Session, x: number, y: number): void {
     menu = {
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
       items: [
         { label: t.tabs.reconnect, action: () => session.connect() },
         { label: t.tabs.close, action: () => manager.close(session.id) },
@@ -212,8 +226,13 @@
         <button class="icon-btn" title={t.tabs.disconnect} aria-label={t.tabs.disconnect} onclick={() => active.disconnect()} disabled={active.state === 'disconnected' || active.state === 'error'}>
           <Unplug size={16} />
         </button>
-        <button class="icon-btn" title={t.tabs.fullscreen} aria-label={t.tabs.fullscreen} onclick={fullscreen}>
-          <Maximize size={16} />
+        {#if canFullscreen}
+          <button class="icon-btn" title={t.tabs.fullscreen} aria-label={t.tabs.fullscreen} onclick={fullscreen}>
+            <Maximize size={16} />
+          </button>
+        {/if}
+        <button class="icon-btn more" title={t.tabs.more} aria-label={t.tabs.more} onclick={(e) => tabMenuFrom(active, e)}>
+          <Ellipsis size={16} />
         </button>
       </div>
     {/if}
@@ -325,8 +344,10 @@
     user-select: none;
   }
 
-  .tab:hover {
-    background: var(--g-panel-2);
+  @media (hover: hover) {
+    .tab:hover {
+      background: var(--g-panel-2);
+    }
   }
 
   .tab.active {
@@ -490,6 +511,36 @@
   .empty p {
     margin: 6px 0 0;
     font-family: var(--g-font-ui, var(--g-font-mono));
+  }
+
+  .more {
+    display: none;
+  }
+
+  @media (pointer: coarse) {
+    .tabbar {
+      height: 44px;
+    }
+
+    .close {
+      padding: 10px;
+    }
+
+    .more {
+      display: inline-flex;
+    }
+  }
+
+  /* Phones: the session actions take less room than the tabs. */
+  @media (max-width: 640px) {
+    .tab {
+      min-width: 90px;
+    }
+
+    .session-actions {
+      gap: 0;
+      padding: 0 2px;
+    }
   }
 
   .workspace:fullscreen .tabbar {

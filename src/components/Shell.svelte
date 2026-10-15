@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { MediaQuery } from 'svelte/reactivity';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import LogOut from '@lucide/svelte/icons/log-out';
   import Moon from '@lucide/svelte/icons/moon';
@@ -13,7 +14,7 @@
   import { loadPref, savePref } from '../lib/prefs';
   import { SessionManager } from '../lib/sessions.svelte';
   import { theme } from '../lib/theme.svelte';
-  import { buildTree, mergeDataSources, type TreeNode } from '../lib/tree';
+  import { buildTree, mergeDataSources, type ConnectionNode, type TreeNode } from '../lib/tree';
   import Sidebar from './Sidebar.svelte';
   import Workspace from './Workspace.svelte';
 
@@ -47,6 +48,10 @@
   let sidebarOpen = $state(loadPref('sidebarOpen', true));
   let sidebarWidth = $state(loadPref('sidebarWidth', 280));
   let timer: ReturnType<typeof setInterval> | undefined;
+  /** Narrow screens: the tree lies over the workspace instead of beside it
+   *  and gets out of the way once a connection is open. Keep in step with
+   *  the media query in the styles below. */
+  const narrow = new MediaQuery('max-width: 640px');
 
   async function refresh(): Promise<void> {
     // Each data source on its own: one broken source must not hide the
@@ -70,7 +75,14 @@
 
   function toggleSidebar(): void {
     sidebarOpen = !sidebarOpen;
-    savePref('sidebarOpen', sidebarOpen);
+    // On a phone the tree opens and closes all the time; that must not
+    // decide how it starts on the desktop.
+    if (!narrow.current) savePref('sidebarOpen', sidebarOpen);
+  }
+
+  function open(node: ConnectionNode, forceNew: boolean): void {
+    manager.open(node, forceNew);
+    if (narrow.current) sidebarOpen = false;
   }
 
   function startResize(event: PointerEvent): void {
@@ -159,12 +171,16 @@
           {loading}
           error={loadError}
           openCount={(key) => manager.openCount(key)}
-          onOpen={(node, forceNew) => manager.open(node, forceNew)}
+          onOpen={open}
           onRefresh={refresh}
         />
       </aside>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="resizer" onpointerdown={startResize}></div>
+      {#if narrow.current}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (the toggle button is the keyboard way) -->
+        <div class="backdrop" onclick={toggleSidebar}></div>
+      {/if}
     {/if}
     <Workspace {manager} />
   </div>
@@ -197,6 +213,10 @@
   }
 
   .title {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-family: var(--g-heading);
     font-weight: 600;
     font-size: 17px;
@@ -218,6 +238,7 @@
   }
 
   .body {
+    position: relative;
     flex: 1;
     display: flex;
     min-height: 0;
@@ -246,8 +267,28 @@
     border-left-color: var(--g-accent-text);
   }
 
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 19;
+    background: var(--g-bg);
+    opacity: 0.6;
+  }
+
   @media (max-width: 640px) {
     .user {
+      display: none;
+    }
+
+    .sidebar {
+      position: absolute;
+      inset: 0 auto 0 0;
+      z-index: 20;
+      max-width: 85%;
+      border-right: 1px solid var(--g-border);
+    }
+
+    .resizer {
       display: none;
     }
   }

@@ -4,6 +4,21 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [Unreleased]
+
+### Changed
+
+- **Phones and tablets.** On a touch screen a single tap opens a
+  connection (no double tap needed). Below 640px the tree lies over the
+  workspace and closes once a connection is open; its open/closed state
+  is no longer saved from there. Buttons, tree rows, tabs and menu entries
+  get finger-sized targets on touch screens.
+- **"⋯" buttons on touch screens** for the tree and tab menus, since iOS
+  fires no context menu on a long press.
+- The fullscreen button is hidden where the browser cannot put an element
+  into fullscreen (iPhone Safari).
+- Hover highlights apply only to devices that can hover.
+
 ## [1.1.2] — 2026-10-14
 
 ### Added

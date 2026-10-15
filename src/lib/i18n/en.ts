@@ -40,9 +40,11 @@ export const en: Messages = {
     partial: 'Some connections could not be loaded.',
     open: 'Open',
     openNew: 'Open in new tab',
+    more: 'More actions',
     active: (n: number) => (n === 1 ? '1 active session' : `${n} active sessions`),
   },
   tabs: {
+    more: 'More actions',
     close: 'Close',
     closeOthers: 'Close others',
     closeAll: 'Close all',

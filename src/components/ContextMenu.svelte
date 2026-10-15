@@ -82,6 +82,12 @@
     outline: none;
   }
 
+  @media (pointer: coarse) {
+    button {
+      padding: 12px 16px;
+    }
+  }
+
   button:disabled {
     color: var(--g-text-muted);
     cursor: default;
