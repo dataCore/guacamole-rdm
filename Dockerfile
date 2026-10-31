@@ -9,12 +9,15 @@ COPY . .
 RUN npm run build
 
 # ── Runtime: unprivileged nginx serving dist/ ────────────────────────────────
-FROM nginxinc/nginx-unprivileged:1.30.5-alpine
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 
 # Only our own config and startup hook. The stock hooks that rewrite files
 # under /etc/nginx are removed: the container runs with a read-only root fs.
+# apk upgrade pulls Alpine security fixes the base image does not have yet
+# (CVE-2026-111497 in brotli-libs).
 USER root
-RUN rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh \
+RUN apk upgrade --no-cache && \
+    rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh \
           /docker-entrypoint.d/20-envsubst-on-templates.sh \
           /etc/nginx/conf.d/default.conf
 COPY docker/nginx.conf /etc/nginx/nginx.conf

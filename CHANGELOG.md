@@ -4,6 +4,16 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.4] — 2026-10-31
+
+### Security
+
+- **Runtime image on `nginx-unprivileged:1.30.6-alpine`** (from 1.30.5):
+  fixes CVE-2026-15176, CVE-2026-93479 and CVE-2026-97205 (HIGH) in nginx.
+- **`apk upgrade` in the runtime stage** pulls Alpine fixes the base image
+  does not carry yet; here `brotli-libs` 1.2.1-r0 for CVE-2026-111497
+  (CRITICAL).
+
 ## [1.1.3] — 2026-10-15
 
 ### Changed
@@ -91,6 +101,8 @@ First public release: connection tree and session tabs in front of Apache
 Guacamole, SSO via Guacamole's OpenID Connect extension, German and English
 UI, light and dark theme, replaceable themes, hardened container image.
 
+[1.1.4]: https://github.com/dataCore/guacamole-rdm/compare/v1.1.3...v1.1.4
+[1.1.3]: https://github.com/dataCore/guacamole-rdm/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/dataCore/guacamole-rdm/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/dataCore/guacamole-rdm/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/dataCore/guacamole-rdm/compare/v1.0.1...v1.1.0
