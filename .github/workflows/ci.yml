@@ -59,6 +59,7 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: guacamole-rdm:scan
+          build-args: APK_REFRESH=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       # Fixable HIGH/CRITICAL fail the run, and nothing is pushed.
@@ -76,5 +77,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: APK_REFRESH=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

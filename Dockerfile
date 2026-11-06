@@ -14,8 +14,10 @@ FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 # Only our own config and startup hook. The stock hooks that rewrite files
 # under /etc/nginx are removed: the container runs with a read-only root fs.
 # apk upgrade pulls Alpine security fixes the base image does not have yet
-# (CVE-2026-111497 in brotli-libs).
+# (CVE-2026-111497 in brotli-libs). APK_REFRESH changes on every CI run so
+# the build cache never hands back an old upgrade layer.
 USER root
+ARG APK_REFRESH=
 RUN apk upgrade --no-cache && \
     rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh \
           /docker-entrypoint.d/20-envsubst-on-templates.sh \

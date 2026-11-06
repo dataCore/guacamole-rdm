@@ -4,7 +4,18 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.6] — 2026-11-06
+
+### Security
+
+- **libexpat 2.10.0-r0** in the image (CVE-2026-113351, CVE-2026-115506,
+  CVE-2026-117610, CVE-2026-118370, HIGH). The CI build cache kept the old
+  `apk upgrade` layer; it is now refreshed on every run.
+
 ## [1.1.5] — 2026-11-06
+
+Tagged, but no image was published: the image scan failed (see 1.1.6).
+
 
 ### Fixed
 
