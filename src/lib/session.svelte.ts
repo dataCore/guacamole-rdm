@@ -19,6 +19,12 @@ const AUTH_STATUS = new Set([0x0301, 0x0303]);
  *  with audio input enabled. */
 const AUDIO_INPUT_MIMETYPE = 'audio/L16;rate=44100,channels=2';
 
+/** Time the remote end gets to take a new clipboard before a paste chord
+ *  follows. RDP carries the clipboard on its own channel, separate from
+ *  the keyboard, so Windows can see Ctrl+V before the new content and
+ *  paste the old one. */
+const CLIPBOARD_SETTLE_MS = 300;
+
 let nextId = 1;
 
 export interface SessionContext {
@@ -56,6 +62,7 @@ export class Session {
   #observer: ResizeObserver | null = null;
   #resizeTimer: ReturnType<typeof setTimeout> | undefined;
   #lastClipboard: string | null = null;
+  #clipboardSentAt = 0;
   #reconnectTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -252,9 +259,16 @@ export class Session {
     if (!this.#client || this.state !== 'connected') return;
     this.#lastClipboard = text;
     this.clipboard = text;
+    this.#clipboardSentAt = performance.now();
     const writer = new Guacamole.StringWriter(this.#client.createClipboardStream('text/plain'));
     writer.sendText(text);
     writer.sendEnd();
+  }
+
+  /** Milliseconds the remote end may still need to take the clipboard sent
+   *  last; 0 once that is long enough ago. */
+  clipboardSettleMs(): number {
+    return Math.max(0, this.#clipboardSentAt + CLIPBOARD_SETTLE_MS - performance.now());
   }
 
   #receiveClipboard(stream: Guacamole.InputStream, mimetype: string): void {

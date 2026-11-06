@@ -49,7 +49,9 @@ that are not obvious from the code.
   and visibility, and on paste: Ctrl+V / Shift+Insert are held back until
   the browser's `paste` event has sent the text (no permission needed), then
   released in order with any keys typed meanwhile; a short timer releases
-  them if no paste event comes.
+  them if no paste event comes. After a new clipboard the chord waits
+  `CLIPBOARD_SETTLE_MS` more: RDP carries the clipboard on its own channel,
+  and without the wait Windows pastes the previous content.
 - **Follow Guacamole's own client where it defines behaviour:** downloads go
   through `api/session/tunnels/{uuid}/streams/{index}/{name}?token=` (the
   browser fetches them, so the token is in the query); automatic reconnect

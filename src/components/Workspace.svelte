@@ -61,12 +61,18 @@
 
   /** The browser's paste event carries the local clipboard without any
    *  permission. Its text goes to the remote end before the held paste
-   *  chord, so the remote paste sees it. */
+   *  chord, and the chord waits until the remote end has had time to take
+   *  a clipboard sent just now (here or on focus), so the remote paste
+   *  sees it. */
   function onPaste(event: ClipboardEvent): void {
     event.preventDefault();
     const text = event.clipboardData?.getData('text/plain');
     if (text) typingTo?.pushClipboard(text);
-    releaseHeld();
+    const wait = typingTo?.clipboardSettleMs() ?? 0;
+    if (!held) return;
+    clearTimeout(heldTimer);
+    if (wait > 0) heldTimer = setTimeout(releaseHeld, wait);
+    else releaseHeld();
   }
 
   onMount(() => {

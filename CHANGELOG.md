@@ -4,6 +4,15 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [Unreleased]
+
+### Fixed
+
+- **Paste into Windows sessions pasted the previous clipboard.** RDP carries
+  the clipboard on its own channel, so Ctrl+V could reach Windows before the
+  new content. After a new clipboard the paste chord now waits 300 ms;
+  pasting the same content again is not delayed.
+
 ## [1.1.4] — 2026-10-31
 
 ### Security
