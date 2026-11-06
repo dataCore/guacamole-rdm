@@ -4,6 +4,16 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.7] — 2026-11-06
+
+### Fixed
+
+- **Right-click paste into a Windows console pasted the previous
+  clipboard.** The click that brings the focus back starts reading the
+  local clipboard, but reached Windows before the new content. A mouse
+  button pressed while the clipboard is read or settling now waits for it
+  (at most 1 s); with an unchanged clipboard nothing waits.
+
 ## [1.1.6] — 2026-11-06
 
 ### Security

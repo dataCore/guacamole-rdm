@@ -25,6 +25,10 @@ const AUDIO_INPUT_MIMETYPE = 'audio/L16;rate=44100,channels=2';
  *  paste the old one. */
 const CLIPBOARD_SETTLE_MS = 300;
 
+/** Upper bound for holding back mouse events while the local clipboard is
+ *  read (the browser may wait for a permission prompt). */
+const MOUSE_HOLD_MAX_MS = 1000;
+
 let nextId = 1;
 
 export interface SessionContext {
@@ -63,6 +67,11 @@ export class Session {
   #resizeTimer: ReturnType<typeof setTimeout> | undefined;
   #lastClipboard: string | null = null;
   #clipboardSentAt = 0;
+  /** Local clipboard read in flight, or null. */
+  #clipboardReading: Promise<void> | null = null;
+  /** Mouse states held back until the remote end has the new clipboard,
+   *  in order; null when nothing is held. */
+  #heldMouse: Guacamole.Mouse.State[] | null = null;
   #reconnectTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -172,7 +181,7 @@ export class Session {
     };
     display.showCursor(false);
     mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (event) => {
-      if (this.#client === client) client.sendMouseState((event as Guacamole.Mouse.Event).state, true);
+      if (this.#client === client) this.#sendMouse(client, (event as Guacamole.Mouse.Event).state);
     });
 
     const { width, height, dpi } = this.#targetSize();
@@ -240,10 +249,16 @@ export class Session {
    *  refuses, the paste event and the clipboard field remain. */
   syncLocalClipboard(): void {
     if (this.state !== 'connected' || !navigator.clipboard?.readText) return;
-    navigator.clipboard.readText().then(
-      (text) => this.pushClipboard(text),
-      (error: unknown) => console.debug('Local clipboard not readable:', error),
-    );
+    const reading = navigator.clipboard
+      .readText()
+      .then(
+        (text) => this.pushClipboard(text),
+        (error: unknown) => console.debug('Local clipboard not readable:', error),
+      )
+      .finally(() => {
+        if (this.#clipboardReading === reading) this.#clipboardReading = null;
+      });
+    this.#clipboardReading = reading;
   }
 
   /** Local clipboard to the remote end; skipped when nothing changed, so
@@ -269,6 +284,39 @@ export class Session {
    *  last; 0 once that is long enough ago. */
   clipboardSettleMs(): number {
     return Math.max(0, this.#clipboardSentAt + CLIPBOARD_SETTLE_MS - performance.now());
+  }
+
+  /** A click can paste on the remote end (right click in a console, middle
+   *  click), and the click that brings the focus back is the one that
+   *  starts reading the local clipboard. A pressed button therefore waits,
+   *  like the paste chord, until the remote end has the new clipboard;
+   *  everything after it is held back in order. */
+  #sendMouse(client: Guacamole.Client, state: Guacamole.Mouse.State): void {
+    // Guacamole.Mouse updates its state object in place; keep a copy.
+    const copy = new Guacamole.Mouse.State(
+      state.x, state.y, state.left, state.middle, state.right, state.up, state.down,
+    );
+    if (this.#heldMouse) {
+      this.#heldMouse.push(copy);
+      return;
+    }
+    const pressed = copy.left || copy.middle || copy.right;
+    if (pressed && (this.#clipboardReading || this.clipboardSettleMs() > 0)) {
+      this.#heldMouse = [copy];
+      void this.#releaseMouse(client, performance.now() + MOUSE_HOLD_MAX_MS);
+      return;
+    }
+    client.sendMouseState(copy, true);
+  }
+
+  async #releaseMouse(client: Guacamole.Client, deadline: number): Promise<void> {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+    if (this.#clipboardReading) await Promise.race([this.#clipboardReading, sleep(deadline - performance.now())]);
+    await sleep(Math.min(this.clipboardSettleMs(), deadline - performance.now()));
+    const held = this.#heldMouse ?? [];
+    this.#heldMouse = null;
+    if (this.#client !== client) return;
+    for (const state of held) client.sendMouseState(state, true);
   }
 
   #receiveClipboard(stream: Guacamole.InputStream, mimetype: string): void {
@@ -381,6 +429,7 @@ export class Session {
   #teardown(): void {
     const client = this.#client;
     this.#client = null;
+    this.#heldMouse = null;
     this.required = null;
     this.unstable = false;
     this.cancelReconnect();
