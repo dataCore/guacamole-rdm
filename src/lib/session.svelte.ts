@@ -1,4 +1,5 @@
 import { credentialFields, type CredentialField } from './credentials';
+import { InputQueue } from './input-queue';
 import { statusMessage, t } from './i18n';
 import { RECONNECT_DELAY, shouldAutoReconnect, streamDownloadUrl, type FailureSource } from './streams';
 import type { ConnectionNode } from './tree';
@@ -25,9 +26,25 @@ const AUDIO_INPUT_MIMETYPE = 'audio/L16;rate=44100,channels=2';
  *  paste the old one. */
 const CLIPBOARD_SETTLE_MS = 300;
 
-/** Upper bound for holding back mouse events while the local clipboard is
- *  read (the browser may wait for a permission prompt). */
-const MOUSE_HOLD_MAX_MS = 1000;
+/** How long a paste chord waits for the browser's paste event. */
+const PASTE_WAIT_MS = 200;
+
+/** Upper bound for holding back input, whatever it waits for. */
+const INPUT_HOLD_MAX_MS = 1000;
+
+/** Whether the browser reads the local clipboard without asking. Only then
+ *  is a read quick enough to hold input for it: otherwise it waits for a
+ *  permission prompt or, in Firefox and Safari, for a click on the paste
+ *  popup, and every click into the viewport would lag. */
+let clipboardReadGranted = false;
+globalThis.navigator?.permissions
+  ?.query({ name: 'clipboard-read' as PermissionName })
+  .then((status) => {
+    const update = () => (clipboardReadGranted = status.state === 'granted');
+    update();
+    status.addEventListener('change', update);
+  })
+  .catch(() => undefined); // name unknown to the browser
 
 let nextId = 1;
 
@@ -67,11 +84,13 @@ export class Session {
   #resizeTimer: ReturnType<typeof setTimeout> | undefined;
   #lastClipboard: string | null = null;
   #clipboardSentAt = 0;
-  /** Local clipboard read in flight, or null. */
+  /** Local clipboard read in flight that input waits for, or null. */
   #clipboardReading: Promise<void> | null = null;
-  /** Mouse states held back until the remote end has the new clipboard,
-   *  in order; null when nothing is held. */
-  #heldMouse: Guacamole.Mouse.State[] | null = null;
+  /** Keys and mouse in order, held back while the remote end does not have
+   *  the local clipboard yet. */
+  readonly #input = new InputQueue();
+  /** A paste chord waits for the browser's paste event. */
+  #pasteTimer: ReturnType<typeof setTimeout> | undefined;
   #reconnectTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -236,7 +255,33 @@ export class Session {
   }
 
   sendKey(pressed: boolean, keysym: number): void {
-    if (this.state === 'connected') this.#client?.sendKeyEvent(pressed ? 1 : 0, keysym);
+    const client = this.#client;
+    if (!client || this.state !== 'connected') return;
+    this.#input.send(() => this.#client === client && client.sendKeyEvent(pressed ? 1 : 0, keysym));
+  }
+
+  /** Ctrl+V or Shift+Insert: the remote end pastes from its own clipboard,
+   *  so the key waits, together with everything after it, until the
+   *  browser's paste event has sent the local one (pasted()). Without a
+   *  paste event (nothing to paste) it goes after PASTE_WAIT_MS. */
+  sendPasteKey(keysym: number): void {
+    const client = this.#client;
+    if (!client || this.state !== 'connected') return;
+    clearTimeout(this.#pasteTimer);
+    this.#pasteTimer = setTimeout(() => {
+      this.#pasteTimer = undefined;
+      this.#releaseWhenReady();
+    }, PASTE_WAIT_MS);
+    this.#input.hold(() => this.#client === client && client.sendKeyEvent(1, keysym), INPUT_HOLD_MAX_MS);
+  }
+
+  /** The browser's paste event, which carries the local clipboard without
+   *  any permission. */
+  pasted(text: string | undefined): void {
+    if (text) this.pushClipboard(text);
+    clearTimeout(this.#pasteTimer);
+    this.#pasteTimer = undefined;
+    this.#releaseWhenReady();
   }
 
   sendCtrlAltDel(): void {
@@ -248,17 +293,21 @@ export class Session {
    *  clipboard-read permission and a focused document; when the browser
    *  refuses, the paste event and the clipboard field remain. */
   syncLocalClipboard(): void {
-    if (this.state !== 'connected' || !navigator.clipboard?.readText) return;
-    const reading = navigator.clipboard
+    const client = this.#client;
+    if (!client || this.state !== 'connected' || !navigator.clipboard?.readText) return;
+    const reading: Promise<void> = navigator.clipboard
       .readText()
-      .then(
-        (text) => this.pushClipboard(text),
-        (error: unknown) => console.debug('Local clipboard not readable:', error),
-      )
+      .then((text) => {
+        // A read that outlives its connection must not reach the next one.
+        if (this.#client === client) this.pushClipboard(text);
+      })
+      .catch((error: unknown) => console.debug('Local clipboard not sent:', error))
       .finally(() => {
-        if (this.#clipboardReading === reading) this.#clipboardReading = null;
+        if (this.#clipboardReading !== reading) return;
+        this.#clipboardReading = null;
+        this.#releaseWhenReady();
       });
-    this.#clipboardReading = reading;
+    if (clipboardReadGranted) this.#clipboardReading = reading;
   }
 
   /** Local clipboard to the remote end; skipped when nothing changed, so
@@ -289,34 +338,33 @@ export class Session {
   /** A click can paste on the remote end (right click in a console, middle
    *  click), and the click that brings the focus back is the one that
    *  starts reading the local clipboard. A pressed button therefore waits,
-   *  like the paste chord, until the remote end has the new clipboard;
-   *  everything after it is held back in order. */
+   *  like the paste chord, until the remote end has a new clipboard. */
   #sendMouse(client: Guacamole.Client, state: Guacamole.Mouse.State): void {
+    const pressed = state.left || state.middle || state.right;
+    const waits = pressed && (this.#clipboardReading !== null || this.clipboardSettleMs() > 0);
+    if (!waits && !this.#input.holding) {
+      client.sendMouseState(state, true);
+      return;
+    }
     // Guacamole.Mouse updates its state object in place; keep a copy.
     const copy = new Guacamole.Mouse.State(
       state.x, state.y, state.left, state.middle, state.right, state.up, state.down,
     );
-    if (this.#heldMouse) {
-      this.#heldMouse.push(copy);
+    const send = () => this.#client === client && client.sendMouseState(copy, true);
+    if (this.#input.holding) {
+      this.#input.send(send);
       return;
     }
-    const pressed = copy.left || copy.middle || copy.right;
-    if (pressed && (this.#clipboardReading || this.clipboardSettleMs() > 0)) {
-      this.#heldMouse = [copy];
-      void this.#releaseMouse(client, performance.now() + MOUSE_HOLD_MAX_MS);
-      return;
-    }
-    client.sendMouseState(copy, true);
+    this.#input.hold(send, INPUT_HOLD_MAX_MS);
+    this.#releaseWhenReady();
   }
 
-  async #releaseMouse(client: Guacamole.Client, deadline: number): Promise<void> {
-    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
-    if (this.#clipboardReading) await Promise.race([this.#clipboardReading, sleep(deadline - performance.now())]);
-    await sleep(Math.min(this.clipboardSettleMs(), deadline - performance.now()));
-    const held = this.#heldMouse ?? [];
-    this.#heldMouse = null;
-    if (this.#client !== client) return;
-    for (const state of held) client.sendMouseState(state, true);
+  /** Held input goes once nothing is pending (paste event, clipboard read)
+   *  and the remote end has had time to take a clipboard sent just now.
+   *  Each pending step calls this again when it ends. */
+  #releaseWhenReady(): void {
+    if (this.#pasteTimer !== undefined || this.#clipboardReading) return;
+    this.#input.releaseIn(this.clipboardSettleMs());
   }
 
   #receiveClipboard(stream: Guacamole.InputStream, mimetype: string): void {
@@ -429,7 +477,10 @@ export class Session {
   #teardown(): void {
     const client = this.#client;
     this.#client = null;
-    this.#heldMouse = null;
+    this.#input.clear();
+    clearTimeout(this.#pasteTimer);
+    this.#pasteTimer = undefined;
+    this.#clipboardReading = null;
     this.required = null;
     this.unstable = false;
     this.cancelReconnect();

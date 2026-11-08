@@ -4,6 +4,25 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.8] — 2026-11-08
+
+### Fixed
+
+- **Clicks in Firefox and Safari no longer lag by up to 1 s.** A click
+  into the session waited for the clipboard read even where the browser
+  waits for a click on its paste popup. Reads are now waited for only
+  where the browser allows them without asking (Chromium with the
+  clipboard permission granted); a new clipboard still delays a pressed
+  button by 300 ms, an unchanged one by nothing beyond the read itself.
+- **Keys no longer overtake a held click.** Typing right after a click
+  that waited for the clipboard could reach the remote end before the
+  click, i.e. in the wrong field. Keys and mouse now share one queue.
+- **Mouse could stop working until reconnect** when sending the clipboard
+  failed while a click was held, and a click held across a reconnect
+  could swallow the first click of the new connection.
+- **A clipboard read could cross a reconnect** and hold the clicks of the
+  new connection or send its text to it.
+
 ## [1.1.7] — 2026-11-06
 
 ### Fixed

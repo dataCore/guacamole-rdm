@@ -46,15 +46,18 @@ that are not obvious from the code.
   only the tab in front shows it. The keyboard is reset when the window or
   the viewport loses focus, so no key stays pressed on the remote end.
 - **Local clipboard to the remote end** on connect (first frame), on focus
-  and visibility, and on paste: Ctrl+V / Shift+Insert are held back until
-  the browser's `paste` event has sent the text (no permission needed), then
-  released in order with any keys typed meanwhile; a short timer releases
-  them if no paste event comes. After a new clipboard the chord waits
-  `CLIPBOARD_SETTLE_MS` more: RDP carries the clipboard on its own channel,
-  and without the wait Windows pastes the previous content. A mouse button
-  pressed while the clipboard is read or settling waits the same way
-  (right click pastes in a console, and the click that returns the focus
-  is what starts the read), at most `MOUSE_HOLD_MAX_MS`.
+  and visibility, and on paste. RDP carries the clipboard on its own
+  channel, so input that can paste waits until the remote end has the new
+  content: Ctrl+V / Shift+Insert until the browser's `paste` event has sent
+  the text (no permission needed; a short timer if none comes), a pressed
+  mouse button while a clipboard read is in flight (right click pastes in a
+  console, and the click that returns the focus is what starts the read),
+  then both `CLIPBOARD_SETTLE_MS` after a new clipboard, at most
+  `INPUT_HOLD_MAX_MS`. Keys and mouse share one queue per session
+  (`src/lib/input-queue.ts`), so nothing overtakes held input. Reads are
+  waited for only with the `clipboard-read` permission granted; otherwise
+  the browser may wait for the user (Firefox and Safari show a paste
+  popup).
 - **Follow Guacamole's own client where it defines behaviour:** downloads go
   through `api/session/tunnels/{uuid}/streams/{index}/{name}?token=` (the
   browser fetches them, so the token is in the query); automatic reconnect

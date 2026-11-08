@@ -36,14 +36,6 @@
   const KEYSYM_V = 0x76;
   const KEYSYM_V_UPPER = 0x56;
   const KEYSYM_INSERT = 0xff63;
-  /** How long a paste chord waits for the browser's paste event. */
-  const PASTE_WAIT_MS = 200;
-
-  /** Key events held back while a paste chord waits for the paste event,
-   *  in order; null when nothing is held. */
-  let held: (() => void)[] | null = null;
-  let heldTimer: ReturnType<typeof setTimeout> | undefined;
-
   /** Ctrl+V or Shift+Insert: the remote end pastes from its own clipboard,
    *  so the local one has to arrive there first. */
   function isPasteChord(keysym: number): boolean {
@@ -52,27 +44,11 @@
     return modifiers.shift && keysym === KEYSYM_INSERT;
   }
 
-  function releaseHeld(): void {
-    clearTimeout(heldTimer);
-    const events = held ?? [];
-    held = null;
-    for (const send of events) send();
-  }
-
   /** The browser's paste event carries the local clipboard without any
-   *  permission. Its text goes to the remote end before the held paste
-   *  chord, and the chord waits until the remote end has had time to take
-   *  a clipboard sent just now (here or on focus), so the remote paste
-   *  sees it. */
+   *  permission; the session sends it before the held paste chord. */
   function onPaste(event: ClipboardEvent): void {
     event.preventDefault();
-    const text = event.clipboardData?.getData('text/plain');
-    if (text) typingTo?.pushClipboard(text);
-    const wait = typingTo?.clipboardSettleMs() ?? 0;
-    if (!held) return;
-    clearTimeout(heldTimer);
-    if (wait > 0) heldTimer = setTimeout(releaseHeld, wait);
-    else releaseHeld();
+    typingTo?.pasted(event.clipboardData?.getData('text/plain'));
   }
 
   onMount(() => {
@@ -81,35 +57,23 @@
     // never reaches a remote machine.
     keyboard = new Guacamole.Keyboard(viewport);
     keyboard.onkeydown = (keysym) => {
-      const target = typingTo;
-      if (held) {
-        held.push(() => target?.sendKey(true, keysym));
-        return false;
-      }
-      if (target?.state === 'connected' && isPasteChord(keysym)) {
-        // Let the browser act on the chord: it fires the paste event, which
-        // releases the chord. Without one (nothing to paste), the timer does.
-        held = [() => target.sendKey(true, keysym)];
-        heldTimer = setTimeout(releaseHeld, PASTE_WAIT_MS);
+      if (typingTo?.state === 'connected' && isPasteChord(keysym)) {
+        // Let the browser act on the chord: it fires the paste event.
+        typingTo.sendPasteKey(keysym);
         return true;
       }
-      target?.sendKey(true, keysym);
+      typingTo?.sendKey(true, keysym);
       return false;
     };
-    keyboard.onkeyup = (keysym) => {
-      const target = typingTo;
-      if (held) held.push(() => target?.sendKey(false, keysym));
-      else target?.sendKey(false, keysym);
-    };
+    keyboard.onkeyup = (keysym) => typingTo?.sendKey(false, keysym);
   });
 
   onDestroy(() => {
-    clearTimeout(heldTimer);
     keyboard?.reset();
     if (keyboard) keyboard.onkeydown = keyboard.onkeyup = null;
   });
 
-  // Switching tabs: release held keys (no stuck Alt on the old target) and
+  // Switching tabs: release pressed keys (no stuck Alt on the old target) and
   // give the new tab the keyboard.
   $effect(() => {
     const next = manager.active;
