@@ -21,6 +21,7 @@ export class SessionManager {
       return existing;
     }
     const session = new Session(node, this.context);
+    session.onended = () => this.close(session.id);
     this.sessions.push(session);
     this.activeId = session.id;
     return session;

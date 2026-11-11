@@ -76,6 +76,9 @@ export class Session {
   reconnectIn = $state<number | null>(null);
   /** Last text exchanged through the clipboard, either direction. */
   clipboard = $state('');
+  /** Called when the remote end closes the session on its own (e.g. `exit`
+   *  in a shell, logoff): nothing to reconnect to, the tab can go. */
+  onended: (() => void) | null = null;
 
   readonly element: HTMLDivElement;
   #client: Guacamole.Client | null = null;
@@ -178,7 +181,9 @@ export class Session {
           this.#requestAudioInput(client);
           break;
         case 5:
-          if (this.state !== 'error') this.state = 'disconnected';
+          // Without an error, the remote end ended a session that was up.
+          if (this.state === 'connected') this.#end();
+          else if (this.state !== 'error') this.state = 'disconnected';
           break;
       }
     };
@@ -425,11 +430,20 @@ export class Session {
 
   #fail(status: Guacamole.Status, source: FailureSource): void {
     if (this.state === 'error') return;
+    // guacd reports some regular ends as an "error" with SUCCESS, e.g. an
+    // RDP logoff ("User logged off.").
+    if (status.code === Guacamole.Status.Code.SUCCESS) return this.#end();
     if (AUTH_STATUS.has(status.code)) this.context.verifyAuth();
     this.error = { code: status.code, message: status.message ?? null };
     this.state = 'error';
     this.#teardown();
     if (shouldAutoReconnect(status.code, source)) this.#startReconnect();
+  }
+
+  #end(): void {
+    this.#teardown();
+    this.state = 'disconnected';
+    this.onended?.();
   }
 
   #startReconnect(): void {

@@ -4,6 +4,16 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.9] — 2026-11-11
+
+### Fixed
+
+- **A session the remote end closes now closes its tab.** `exit` in a
+  shell or a logoff left a "Disconnected" dialog with Reconnect and Close
+  tab. A session that ends without an error after it was up, or that
+  guacd ends with a success status (RDP "User logged off."), now closes
+  its tab. Errors and manual disconnects still show the dialog.
+
 ## [1.1.8] — 2026-11-08
 
 ### Fixed
