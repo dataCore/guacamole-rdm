@@ -4,6 +4,16 @@ All notable changes to this project. Versions follow
 [Semantic Versioning](https://semver.org/); each release is a tag `vX.Y.Z`
 and an image `ghcr.io/datacore/guacamole-rdm:X.Y.Z`.
 
+## [1.1.10] — 2026-11-22
+
+### Security
+
+- **nginx 1.30.7** (CVE-2026-113425, CVE-2026-121810, CVE-2026-123007,
+  CVE-2026-123633, CVE-2026-125283, CVE-2026-118899, CVE-2026-123634) and
+  **libxml2 2.13.9-r3** (CVE-2026-86144). No base image with nginx 1.30.7
+  exists yet, so the build now also upgrades nginx and its modules from
+  nginx.org's stable repository.
+
 ## [1.1.9] — 2026-11-11
 
 ### Fixed
